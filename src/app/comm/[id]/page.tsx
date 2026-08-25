@@ -3,6 +3,8 @@
 // 우측 정렬 가격/마감 기준/슬롯/문의 링크 + 격리 렌더 설명 + 커미션별 테마컬러
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useHrefBlock } from '@/components/shell/MenuGuard';
+import { sectionHref, MAIN_SEC } from '@/lib/sectionStore';
 import { useAuth } from '@/lib/auth';
 import { useTheme } from '@/lib/ThemeProvider';
 import { useLocalList } from '@/lib/postStore';
@@ -12,7 +14,7 @@ import {
 import { useFonts } from '@/lib/fontStore';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { useBlobUrl } from '@/lib/blobStore';
-import { CropImg } from '@/components/ui/CropEditor';
+import { CropImg, CropEditor, CropValue } from '@/components/ui/CropEditor';
 import { Tip } from '@/components/ui/Kit';
 import { ConfirmModal } from '@/components/ui/Modal';
 import { PageTitle } from '@/components/ui/PageText';
@@ -42,10 +44,19 @@ function ViewerImg({ fileRef, ph }: { fileRef?: string; ph: string }) {
   );
 }
 
-function StripThumb({ fileRef, ph }: { fileRef?: string; ph: string }) {
+function StripThumb({ fileRef, ph, crop }: { fileRef?: string; ph: string; crop?: CropValue }) {
   const url = useBlobUrl(fileRef);
   if (!url) return <div className={`ph ${ph}`} style={{ position: 'absolute', inset: 0 }} />;
-  return <CropImg src={url} />;
+  return <CropImg src={url} crop={crop} />;
+}
+
+/** 썸네일 위치 잡기 — 줄의 칸과 같은 4:3으로 (v2.0 사용자 요청) */
+function StripCropModal({ fileRef, crop, onClose, onApply }: {
+  fileRef: string; crop?: CropValue; onClose: () => void; onApply: (c: CropValue) => void;
+}) {
+  const url = useBlobUrl(fileRef);
+  if (!url) return null;
+  return <CropEditor open src={url} aspect="4:3" initial={crop} onClose={onClose} onApply={onApply} />;
 }
 
 export default function CommDetailPage() {
@@ -58,8 +69,14 @@ export default function CommDetailPage() {
   const [cur, setCur] = useState(0);
   const [delAsk, setDelAsk] = useState(false);
   const [lbOpen, setLbOpen] = useState(false); // 대표 이미지 클릭 확대 보기
+  // 썸네일 우클릭 순서 바꾸기 (v2.0) — 훅이므로 조기 return보다 먼저
+  const [cropFor, setCropFor] = useState<string | null>(null);   // 썸네일 위치 잡는 중인 이미지
 
   const c = items.find(x => x.id === id);
+  /* 이 글이 속한 곳이 비공개면 주소로 들어와도 열리지 않게 (v2.0 사용자 요청).
+     글 주소에는 섹션이 없어 MenuGuard가 못 막는다 — 글을 읽어 소속을 알아낸 여기서 판정한다.
+     **다른 early return보다 먼저 불러야 한다**(훅이므로 렌더마다 개수가 같아야 한다) */
+  const blocked = useHrefBlock(c && sectionHref('comm', c.secId ?? MAIN_SEC));
 
   // 커미션별 페이지 테마컬러 (4.18) — 접속 시 전체 팔레트 전환, 벗어나면 원복
   const { setPageTheme } = useTheme();
@@ -72,6 +89,8 @@ export default function CommDetailPage() {
 
   const descHtml = useMemo(() => (loaded && c ? sanitizeHtml(c.descHtml) : ''), [loaded, c]);
 
+  // 막힌 곳이면 여기서 되돌아간다 — 훅을 모두 부른 뒤여야 렌더마다 개수가 같다
+  if (blocked) return blocked;
   if (!loaded || !setLoaded) return <section className="page" />;
   if (!c) {
     return (
@@ -85,6 +104,16 @@ export default function CommDetailPage() {
   const sv = slotView(c, settings);
   const imgs: (string | undefined)[] = c.images.length ? c.images : [undefined];
   const curIdx = Math.min(cur, imgs.length - 1);
+
+  /* 썸네일 위치 잡기 (v2.0 사용자 요청) — 우클릭 「썸네일 위치」.
+     줄의 칸은 4:3이라 세로로 긴 그림은 가운데가 잘려 얼굴이 안 보인다. 이미지마다 따로 잡는다.
+     원본은 건드리지 않고 어디를 보여 줄지만 저장한다(다른 자리의 이미지는 그대로). */
+  const saveStripCrop = (ref: string, cv: CropValue) => {
+    setItems(items.map(x => (x.id === c.id
+      ? { ...x, stripCrops: { ...(x.stripCrops ?? {}), [ref]: cv } }
+      : x)));
+    setCropFor(null);
+  };
   const sc = SLOT_CHARS[c.slotShape];
 
   return (
@@ -125,8 +154,14 @@ export default function CommDetailPage() {
       {imgs.length > 1 && (
         <div className="cm-strip">
           {imgs.map((im, i) => (
-            <div key={i} className={`t ${i === curIdx ? 'on' : ''}`} onClick={() => setCur(i)}>
-              <StripThumb fileRef={im} ph={c.ph} />
+            <div key={i} className={`t ${i === curIdx ? 'on' : ''}`} onClick={() => setCur(i)}
+              data-tip={isAdmin && im ? '우클릭 — 썸네일 위치' : undefined}
+              onContextMenu={e => {
+                if (!isAdmin || !im) return;
+                e.preventDefault();
+                setCropFor(im);
+              }}>
+              <StripThumb fileRef={im} ph={c.ph} crop={im ? c.stripCrops?.[im] : undefined} />
             </div>
           ))}
         </div>
@@ -174,6 +209,12 @@ export default function CommDetailPage() {
       </div>
 
       {/* 대표 이미지 확대 보기 — 현재 순번에서 시작, ‹ ›로 이어 넘김 */}
+      {/* 썸네일 우클릭 > 썸네일 위치 (v2.0 사용자 요청) */}
+      {cropFor && (
+        <StripCropModal fileRef={cropFor} crop={c.stripCrops?.[cropFor]}
+          onClose={() => setCropFor(null)} onApply={cv => saveStripCrop(cropFor, cv)} />
+      )}
+
       {lbOpen && c.images.length > 0 && (
         <Lightbox srcs={c.images} index={curIdx} onClose={() => setLbOpen(false)} />
       )}

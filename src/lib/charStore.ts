@@ -4,6 +4,11 @@ export type Visibility = 'public' | 'member' | 'private'; // 공개범위 3단�
 
 export interface ColorChip { hex: string; label: string }
 
+/** 테마컬러 점 테두리 (v2.0 사용자 요청) — 미지정이면 지금까지의 옅은 테두리 그대로,
+ *  'none'이면 없음, hex면 그 색으로 1px */
+export const chipBorder = (bd?: string): string =>
+  (bd === 'none' ? 'none' : `inset 0 0 0 1px ${bd ?? 'rgba(0,0,0,.1)'}`);
+
 export interface CharTab {
   id: string;
   icon: string;          // 아이콘 문자 (업로드 아이콘은 후속)
@@ -20,6 +25,9 @@ export interface Character {
   // 상세 페이지 테마 (v1.9 사용자 확정) — custom이면 대표 테마색으로 홈 팔레트 임시 전환 (4.18 방식)
   themeMode?: 'default' | 'custom';
   colors: ColorChip[];   // 테마 컬러 나열
+  /** 테마컬러 점 테두리 (v2.0 사용자 요청) — 'none' = 없음 · hex = 그 색으로 1px.
+   *  미지정이면 지금까지와 같은 옅은 테두리(안 정한 홈은 모습이 안 바뀐다) */
+  colorBd?: string;
   colorTipMode?: 'hex' | 'both' | 'label'; // 색 점 툴팁 표기: hex / 이름+hex / 이름만
   specs: { label: string; value: string }[];
   tabs: CharTab[];       // 기본 정보 외 추가 탭
@@ -85,15 +93,28 @@ export function charWithAu(c: Character, auKey?: string | null): Character {
     ...(p.specs !== undefined ? { specs: p.specs } : {}),
     ...(p.tabs !== undefined ? { tabs: p.tabs } : {}),
     ...(p.basicHtml !== undefined ? { basicHtml: p.basicHtml } : {}),
-    ...(p.arts !== undefined ? { arts: p.arts, artId: p.arts[0] } : {}),
-    ...(p.thumbId !== undefined ? { thumbId: p.thumbId } : {}),
-    ...(p.thumbCrop !== undefined ? { thumbCrop: p.thumbCrop } : {}),
+    // 이미지는 **물려받지 않는다** (v2.0 사용자 요청) — AU 프로필에 안 넣었으면 비워 둔다.
+    // 글씨(이름·소개·스펙)는 AU에서 안 고쳤으면 base를 쓰는 게 자연스럽지만, 그림은 다르다:
+    // 학원 AU를 만들어 놓고 그림을 아직 안 넣었는데 원본 그림이 그대로 떠 있으면
+    // 그 AU의 그림인 줄 알게 된다. 자관 전신이 이미 같은 규칙이다(「AU는 자기 전신만」).
+    arts: p.arts ?? [],
+    artId: p.arts?.[0],
+    thumbId: p.thumbId,
+    thumbCrop: p.thumbCrop,
     ...(p.fontId !== undefined ? { fontId: p.fontId } : {}),
     ...(p.bodyFontId !== undefined ? { bodyFontId: p.bodyFontId } : {}),
   };
 }
 
 export interface CharGrant { userId: string; level: 'play' | 'edit' }
+
+/** 이 자관의 멤버 캐릭터 중 하나라도 권한을 받은 회원인가 (v2.0) — 문답 숨김 판정 */
+export function hasRelGrant(
+  members: { charId: string }[], chars: Character[], userId?: string,
+): boolean {
+  if (!userId) return false;
+  return members.some(m => !!charGrant(chars.find(c => c.id === m.charId) ?? { grants: [] } as unknown as Character, userId));
+}
 
 /** 회원의 캐릭터 권한 — edit는 play를 포함 */
 export function charGrant(c: Character, userId?: string): 'play' | 'edit' | null {
@@ -178,10 +199,114 @@ export type RelCpTag = 'cp' | 'ncp';
 
 /** AU 한 항목 (v1.9 확장) — 캐치프레이즈만이 아니라 프로필 전체가 AU별로 분리:
  *  중앙 일러(arts)·타임라인·문답·CP/NCP. base(원본)는 Relation 최상위 필드를 그대로 사용 (기존 데이터 호환) */
+/**
+ * AU에서만 다르게 보여 줄 멤버 값 (v2.0 사용자 발견).
+ *
+ * 전신 위치·크기, 한마디, 대사 색, 이름 크기는 **자관 멤버(RelMember)에만** 있었다. AU 수정
+ * 화면에서 고쳐도 결국 자관 공통 값을 고치는 것이라 **다른 AU 페이지까지 같이 바뀌었다.**
+ * AU 쪽에 따로 담아 두고, 여기 없는 값만 자관 기본을 그대로 쓴다(→ `auMember`).
+ */
+export interface RelAuMember {
+  quote?: string;
+  fullScale?: number;
+  fullOffX?: number;
+  fullOffY?: number;
+  nameSize?: number;
+  quoteColor?: string;
+  quoteMarkColor?: string;
+}
+
+/** 이 AU에서 이 멤버를 어떻게 보여 줄지 — AU에 정해 둔 값이 있으면 그것, 없으면 자관 기본.
+ *  base(원본) AU이거나 정해 둔 게 없으면 자관 멤버를 그대로 돌려준다. */
+export function auMember(m: RelMember, au?: RelAu): RelMember {
+  const o = au?.mset?.[m.charId];
+  if (!o) return m;
+  const out = { ...m };
+  // undefined는 「안 정했다」는 뜻 — 그대로 덮으면 자관 기본까지 지워진다
+  (Object.keys(o) as (keyof RelAuMember)[]).forEach(k => {
+    const v = o[k];
+    if (v !== undefined) (out as Record<string, unknown>)[k] = v;
+  });
+  return out;
+}
+
+/**
+ * AU에서만 다르게 쓸 색·배경 (v2.0 사용자 요청 — 「AU 페이지에서도 색상 테마 같은 걸 다 따로」).
+ *
+ * 값이 있으면 그것, 없으면 자관 기본을 그대로 쓴다(→ `auStyle`). 자관 쪽 「직접 지정」 체크를
+ * 끄면 그 값들이 사라지듯, AU에서도 체크를 끄면 여기서 지워져 자관 값으로 되돌아간다.
+ */
+export interface RelAuStyle {
+  nameColor?: string;
+  cpColor?: string;
+  cpTagBg?: string;
+  cpTagFg?: string;
+  nameShadowColor?: string;
+  nameShadow?: number;
+  headerBgG1?: string; headerBgG2?: string; headerBgAngle?: number;
+  pageBgG1?: string; pageBgG2?: string; pageBgAngle?: number;
+  illuBg?: string; illuOn?: string;
+}
+
+/** 이 AU에서 실제로 쓸 색·배경 — AU에 정해 둔 값이 있으면 그것, 없으면 자관 기본 */
+export function auStyle(rel: Relation, au?: RelAu): RelAuStyle {
+  const s = au?.style;
+  const base: RelAuStyle = {
+    nameColor: rel.nameColor, cpColor: rel.cpColor,
+    cpTagBg: rel.cpTagBg, cpTagFg: rel.cpTagFg,
+    nameShadowColor: rel.nameShadowColor, nameShadow: rel.nameShadow,
+    headerBgG1: rel.headerBgG1, headerBgG2: rel.headerBgG2, headerBgAngle: rel.headerBgAngle,
+    pageBgG1: rel.pageBgG1, pageBgG2: rel.pageBgG2, pageBgAngle: rel.pageBgAngle,
+    illuBg: rel.illuBg, illuOn: rel.illuOn,
+  };
+  if (!s) return base;
+  const out = { ...base };
+  // 「자관 색·배경 묶음」 단위로 갈아 끼운다 — 한 묶음이라도 AU에 정해 뒀으면 그 묶음 전체를 AU 것으로.
+  // 색 하나만 AU 값이고 나머지는 자관 값이면 어울리지 않는 조합이 나온다
+  if (s.nameColor !== undefined || s.cpColor !== undefined) {
+    out.nameColor = s.nameColor; out.cpColor = s.cpColor;
+  }
+  if (s.cpTagBg !== undefined || s.cpTagFg !== undefined) {
+    out.cpTagBg = s.cpTagBg; out.cpTagFg = s.cpTagFg;
+  }
+  if (s.nameShadowColor !== undefined || s.nameShadow !== undefined) {
+    out.nameShadowColor = s.nameShadowColor; out.nameShadow = s.nameShadow;
+  }
+  if (s.headerBgG1 !== undefined || s.headerBgG2 !== undefined) {
+    out.headerBgG1 = s.headerBgG1; out.headerBgG2 = s.headerBgG2; out.headerBgAngle = s.headerBgAngle;
+  }
+  if (s.pageBgG1 !== undefined || s.pageBgG2 !== undefined) {
+    out.pageBgG1 = s.pageBgG1; out.pageBgG2 = s.pageBgG2; out.pageBgAngle = s.pageBgAngle;
+  }
+  if (s.illuBg !== undefined || s.illuOn !== undefined) {
+    out.illuBg = s.illuBg; out.illuOn = s.illuOn;
+  }
+  return out;
+}
+
+/** 전신 이미지에 깔 그림자 (v2.0 사용자 요청) — 「그림자 직접 지정」의 색·강도를 그대로 따른다.
+ *  미지정이면 예전과 같은 검정 35%. 강도를 0으로 두면 그림자를 아예 빼서 또렷하게 둘 수 있다.
+ *  geom은 자리마다 다르다 — 상세는 크게(0 8px 18px), 수정 미리보기는 작게(0 6px 14px). */
+export function fullShadow(color?: string, strength?: number, geom = '0 8px 18px'): string | undefined {
+  const pct = strength ?? 100;
+  if (pct <= 0) return undefined;
+  const a = 0.35 * (pct / 100);
+  const hex = (color ?? '#000000').replace('#', '');
+  const f = hex.length === 3 ? hex.split('').map(c => c + c).join('') : hex;
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(f.slice(i, i + 2), 16) || 0);
+  return `drop-shadow(${geom} rgba(${r},${g},${b},${a}))`;
+}
+
 export interface RelAu {
   id: string;
   label: string;
   catchphrase: string;
+  /** AU별 자관명 (v2.0 사용자 요청) — 비우면 자관 이름을 그대로 쓴다 */
+  name?: string;
+  /** AU별 색·배경 — 없으면 자관 기본 (위 RelAuStyle 설명 참조) */
+  style?: RelAuStyle;
+  /** AU별 멤버 표시값 — 없으면 자관 기본 (위 RelAuMember 설명 참조) */
+  mset?: Record<string, RelAuMember>;
   quotes?: string[];
   cp?: RelCpTag;          // 없으면 자관 기본(Relation.cp)
   arts?: string[];        // AU별 중앙/그룹 일러 (base는 Relation.arts)
@@ -237,10 +362,19 @@ export interface Relation {
   cp?: RelCpTag;                 // 자관 기본 CP/NCP (등록 시 선택, v1.9)
   fullFront?: string;            // 전신 모드에서 앞에 보일 캐릭터 id (v1.9 — 미리보기에서 클릭 선택)
   pairRight?: string;            // 페어에서 오른쪽 자리에 둘 캐릭터 id (v2.0 — 없으면 등록 순서대로)
+  /** 상세 중앙 일러가 어디를 보여 줄지 (v2.0 사용자 요청) — 리스트 썸네일(thumbCrop)과 별개.
+    *  **이미지 참조를 키로** 두어 여러 장을 각각 잡을 수 있고, AU의 일러도 같은 자리에 담긴다
+    *  (참조가 다르므로 섞이지 않는다). 원본은 건드리지 않는다. */
+   artCrops?: Record<string, import('@/components/ui/CropEditor').CropValue>;
   timeline: TlItem[];            // base AU의 타임라인
   questions: QaEntry[];          // base AU의 문답
   qaPool?: string[];             // base AU의 대기 질문 풀 (v1.9 — 랜덤 출제 대기)
   qaEnabled?: boolean;           // base AU의 QUESTIONS 섹션 사용 여부 (구버전은 questions 존재로 판정)
+  /** 문답 답변 숨기기 (v2.0 사용자 요청) — 질문은 그대로 두고 **답변 내용만** 가린다.
+   *  켜면 **관리자와 이 자관 캐릭터에 권한을 받은 회원만** 볼 수 있다(사용자 확정).
+   *  **화면에서 가리는 것일 뿐 완전한 차단이 아니다** — 답변은 공개로 저장돼 있어 주소를 직접
+   *  다루는 사람에게는 보일 수 있다. 설정 화면에도 그대로 적어 둔다. */
+  qaHide?: boolean;
 }
 
 export const CHAR_SEED: Character[] = [];

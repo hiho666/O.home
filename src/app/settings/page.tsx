@@ -1,7 +1,7 @@
 ﻿'use client';
 // 환경설정 (기획서 5장) — 0차: 「디자인」 탭(테마) 실동작.
 // 나머지 카테고리는 해당 기능 마일스톤에서 함께 구현.
-import React, { Suspense, useEffect, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth, inviteCode, setInviteCode } from '@/lib/auth';
 import { useMembers } from '@/lib/members';
 import { useTheme } from '@/lib/ThemeProvider';
@@ -19,15 +19,17 @@ import {
   useBoardSettings, boardBadgeStyle, BoardBadge,
   useBoards, Board, BoardSkin, BoardPerm, DEFAULT_BOARD_CATS, MAIN_BOARD_ID,
 } from '@/lib/boardStore';
-import { useThreadSettings, ThreadWork, THREAD_SEED, ThreadCat, threadBadgeStyle } from '@/lib/threadStore';
+import { useThreadSettings, ThreadWork, THREAD_SEED, ThreadCat, threadBadgeStyle, threadCats, threadCatsPatch } from '@/lib/threadStore';
 import { useTrpgSettings, DOTORI_STATUS_KEYS, DotoriStatus, dotoriBadgeStyle } from '@/lib/galleryStore';
 import { useMemoSettings } from '@/lib/memoStore';
 import {
   useMenuSettings, MenuSettings, MenuPerm, MenuVis, PLAYLOG_COLS,
-  MenuGroupNode, MenuLeaf, defaultTree, newGroupId, menuLabelFor, extraBoardHref,
+  MenuGroupNode, MenuLeaf, defaultTree, newGroupId, menuLabelFor, extraBoardHref, boardEntries,
   IMG_PROTECT_AREAS,
 } from '@/lib/menuStore';
 import { FEATURES } from '@/lib/menu';
+import { SectionsBlock } from '@/components/settings/SectionList';
+import { useSections, sectionMenuEntries, MAIN_SEC, inSection } from '@/lib/sectionStore';
 import { useSiteDraft } from '@/lib/siteStore';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCursorSettings, CursorState, CURSOR_STATE_LABEL } from '@/lib/cursorStore';
@@ -36,6 +38,7 @@ import { SymbolInput } from '@/components/ui/SymbolInput';
 import { allBlobs, putBlobAs, useBlobUrl, getBlob } from '@/lib/blobStore';
 import { parseAni } from '@/lib/aniCursor';
 import { fileDrop } from '@/lib/dnd';
+import { Character, CHAR_SEED, Relation, REL_SEED } from '@/lib/charStore';
 import { useLocalList } from '@/lib/postStore';
 import { Mood, MOOD_SEED, moodTint } from '@/lib/diaryStore';
 import {
@@ -49,6 +52,8 @@ import { putBlob } from '@/lib/blobStore';
 import { getSetting, setSetting, pushLocalSettings, unsyncedSettingKeys, SETTING_KEYS } from '@/lib/settingStore';
 import { isServerMode, createBackend, backend } from '@/lib/backend';
 import type { BackendConfig, BackendKind } from '@/lib/backend/types';
+import { CONTENT_COLLECTIONS } from '@/lib/backend/types';
+import { visFloorOf } from '@/lib/visFloor';
 import { validateConfig, configFileText, saveLocalConfig, parseFirebaseSnippet, serverConfig } from '@/lib/serverConfig';
 import { migrateTo, findOrphanFiles } from '@/lib/transfer';
 import { FIRESTORE_RULES, STORAGE_RULES } from '@/lib/firebaseRules';
@@ -67,6 +72,36 @@ function CP({ label, k, def }: { label?: string; k: keyof ThemeVars; def?: strin
       {label && <span className="cp-lb">{label}</span>}
       <ColorField value={String(state.vars[k] ?? def ?? '#888888')} onChange={hex => setVar(k, hex as never)} />
     </>
+  );
+}
+
+/**
+ * 위젯 스타일 (v2.0 사용자 요청) — 메인·사이드에 얹히는 카드의 배경·타이틀색·본문색·테두리.
+ *
+ * 색을 안 정하면 `--wg-*`가 카드 색을 그대로 가리키므로 지금까지와 똑같이 보인다. 그래서 값이
+ * 비어 있을 때 입력란에는 **지금 실제로 쓰이는 카드 색**을 채워 둔다 — 처음 열었을 때 엉뚱한
+ * 회색이 아니라 화면에 보이는 그 색이 나와야 조금만 바꿔 쓰기 쉽다.
+ * 테두리는 켤 때만 그린다(끄면 지금처럼 그림자만).
+ */
+function WidgetStyleRow() {
+  const { state, setVar } = useTheme();
+  const v = state.vars;
+  return (
+    <div className="set-row" style={{ flexWrap: 'wrap' }}>
+      <div className="l"><b>위젯</b>
+        <small>메인·사이드에 얹히는 카드 — 비워 두면 카드 색을 그대로 따라갑니다</small></div>
+      <div style={{ display: 'grid', gap: 8, justifyItems: 'end' }}>
+        <div className="cp-grid2">
+          <CP label="배경" k="wgBg" def={v.cardBg ?? '#fbfbfc'} />
+          <CP label="타이틀" k="wgTitle" def={v.pageDesc ?? '#8a8f98'} />
+          <CP label="본문" k="wgFg" def={v.cardFg ?? '#1d2025'} />
+        </div>
+        <div className="cf-row" style={{ justifyContent: 'flex-end' }}>
+          <KCheck label="테두리" checked={!!v.wgBorder} onChange={b => setVar('wgBorder', b)} />
+          {v.wgBorder && <CP label="색" k="wgBd" def="#e6e8ec" />}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -433,6 +468,9 @@ function DesignPane() {
         </div>
       </div>
 
+      {/* 위젯 스타일 (v2.0 사용자 요청) — 메인·사이드 카드. 안 정하면 카드 색을 그대로 따라간다 */}
+      <WidgetStyleRow />
+
       <div className="set-row">
         <div className="l"><b>진한 버튼</b><small>등록·저장 버튼과 체크박스·선택 필터 칩 공통</small></div>
         <div className="cp-group">
@@ -766,6 +804,10 @@ function BoardPane() {
         )} />
       <button className="btn btn-ghost" style={{ marginTop: 8, padding: '7px 14px', fontSize: 11 }}
         onClick={addGalleryCat}>＋ 말머리 추가</button>
+
+      <hr style={{ margin: '24px 0', border: 'none', borderTop: '1.5px solid var(--line)' }} />
+      {/* 갤러리·다이어리 등도 여러 개로 (v2.0 사용자 요청) — 목록이 몇 개인지는 여기 한곳에서 */}
+      <SectionsBlock />
 
       {del.element}
     </div>
@@ -1468,8 +1510,11 @@ function DataPane() {
       const rows = await findOrphanFiles(be);
       setOrphans(rows);
       toast(rows.length ? `쓰지 않는 이미지 ${rows.length}개를 찾았습니다` : '정리할 이미지가 없습니다');
-    } catch {
-      toast('이미지 목록을 읽지 못했습니다 — 저장소 권한(규칙)을 확인해 주세요');
+    } catch (e) {
+      // 멈춘 이유를 그대로 보여 준다 (v2.0) — 「권한 문제」로 뭉뚱그리면 진짜 원인을 놓친다
+      toast(e instanceof Error && e.message
+        ? e.message
+        : '이미지 목록을 읽지 못했습니다 — 저장소 권한(규칙)을 확인해 주세요');
     }
     setScanning(false);
   };
@@ -1485,6 +1530,25 @@ function DataPane() {
     setOrphans(null);
     setScanning(false);
     toast(`이미지 ${n}개를 지웠습니다`);
+  };
+
+  /* 어디에도 안 걸린 상대 캐릭터 정리 (v2.0 사용자 요청).
+     자관을 지워도 그 자관에서 만든 상대 캐릭터는 남는다. **일부러 그렇게 둔다** — 실수로 자관을
+     지웠을 때 캐릭터까지 사라지면 되돌릴 방법이 없기 때문(사용자 판단). 대신 정말 아무 자관에도
+     안 걸린 것만 골라 여기서 지운다. 내 캐릭터(own)는 자관과 무관하게 존재하므로 건드리지 않는다. */
+  const [chars, setChars] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
+  const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
+  const [charAsk, setCharAsk] = useState(false);
+  const orphanChars = useMemo(() => {
+    const used = new Set<string>();
+    rels.forEach(r => r.members.forEach(m => used.add(m.charId)));
+    return chars.filter(c => !c.own && !used.has(c.id));
+  }, [chars, rels]);
+
+  const cleanChars = () => {
+    const gone = new Set(orphanChars.map(c => c.id));
+    setChars(chars.filter(c => !gone.has(c.id)));
+    toast(`상대 캐릭터 ${gone.size}명을 지웠습니다`);
   };
 
   // 이 브라우저에 저장돼 있던 사이트 설정을 서버로 올린다 (연결 직후 1회면 충분)
@@ -1629,6 +1693,22 @@ function DataPane() {
           </div>
         </div>
       )}
+      {/* 어디에도 안 걸린 상대 캐릭터 정리 (v2.0 사용자 요청) — 자관을 지워도 캐릭터는 일부러 남긴다.
+          실수로 지웠을 때 되돌릴 수 있게. 정말 안 쓰는 것만 여기서 골라 지운다 */}
+      <div className="set-row" style={{ flexWrap: 'wrap' }}>
+        <div className="l"><b>등록되지 않은 상대 캐릭터 정리</b>
+          <small>자관을 지워도 상대 캐릭터는 남습니다(실수로 지웠을 때를 위해) — 어느 자관에도 없는 캐릭터만 골라 지웁니다</small></div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="hint">
+            {orphanChars.length > 0 ? `${orphanChars.length}명` : '정리할 것 없음'}
+          </span>
+          {orphanChars.length > 0 && (
+            <button className="btn btn-accent" style={{ padding: '9px 18px' }}
+              onClick={() => setCharAsk(true)}>{orphanChars.length}명 지우기</button>
+          )}
+        </div>
+      </div>
+
       {/* 백업 두 갈래 (v1.9 사용자 확정) — 회원 계정 포함 여부 선택 */}
       <div className="set-row" style={{ flexWrap: 'wrap' }}>
         <div className="l"><b>백업 내보내기</b><small>글·캐릭터·설정 + 이미지 → zip · 회원 계정(가입자·가입코드) 포함 여부 선택</small></div>
@@ -1778,6 +1858,15 @@ function DataPane() {
           { label: 'CANCEL', kind: 'ghost', onClick: () => setCleanAsk(false) },
         ]} />
 
+      {/* 지울 캐릭터 이름을 그대로 보여 준다 (v2.0) — 개수만으로는 무엇이 사라지는지 알 수 없다 */}
+      <ConfirmModal open={charAsk} title={`상대 캐릭터 ${orphanChars.length}명을 지울까요?`}
+        body={`${orphanChars.slice(0, 12).map(c => c.name).join(', ')}${orphanChars.length > 12 ? ` 외 ${orphanChars.length - 12}명` : ''} — 어느 자관에도 등록돼 있지 않은 캐릭터입니다. 지우면 복구할 수 없습니다.`}
+        onClose={() => setCharAsk(false)}
+        buttons={[
+          { label: '지우기', kind: 'accent', onClick: () => { setCharAsk(false); cleanChars(); } },
+          { label: 'CANCEL', kind: 'ghost', onClick: () => setCharAsk(false) },
+        ]} />
+
       <ConfirmModal open={resetAsk} title="선택한 항목을 초기화할까요?"
         body={`지울 항목: ${[...RESET_CONTENT, ...RESET_EXTRA].filter(g => picked.includes(g.key)).map(g => g.label).join(' · ')}\n삭제한 내용은 복구할 수 없습니다.`}
         onClose={() => setResetAsk(false)}
@@ -1812,12 +1901,19 @@ function DataPane() {
 /** 메뉴 관리 탭 (5.2 — 메뉴 선택제) — 노출·순서·이름 + 메뉴별 부속 설정 */
 function MenuPane() {
   const [ms, patch, msLoaded] = useMenuSettings();
+  // 글에도 적용 (v2.0 사용자 요청) — 아래 applyVis 참조
+  const { user } = useAuth();
+  const [visBusy, setVisBusy] = useState(false);
+  const [visAsk, setVisAsk] = useState(false);
   const [commSet, patchComm] = useCommSettings();
   const { boards, loaded: bLoaded, patchBoard } = useBoards();  // 추가 게시판 이름·자동 편입 동기화 + 권한
   const toast = useToast();
   const del = useConfirmDelete();
   const saved = ms.tree ?? defaultTree();
-  const defLabel = (href: string) => menuLabelFor(href, boards) ?? href;
+  // 게시판 + 여러 개로 만든 섹션 — 메뉴가 아는 「추가 항목」 전체 (v2.0)
+  const { map: secMap } = useSections();
+  const extraAll = [...boardEntries(boards), ...sectionMenuEntries(secMap)];
+  const defLabel = (href: string) => menuLabelFor(href, extraAll) ?? href;
 
   // 드래프트 — 모든 편집(삭제 포함)은 SAVE를 눌러야 실제 메뉴에 반영 (v1.9 사용자 피드백)
   const [draft, setDraft] = useState<MenuGroupNode[] | null>(null);
@@ -1837,6 +1933,29 @@ function MenuPane() {
 
   const setTree = (t: MenuGroupNode[]) => setDraft(t);
   const saveAll = () => { patch({ tree, removedBoards: removed }); toast('메뉴가 저장되었습니다'); };
+
+  /* 이미 올라간 글의 공개범위를 서버에 적용 (v2.0 사용자 요청).
+     화면에서 가리는 것만으로는 API를 직접 부르는 사람에게 그대로 보인다 — 서버(RLS)가
+     내주지 않게 하려면 행의 공개범위 칸 자체가 좁아야 한다.
+     컬렉션을 하나씩 훑어 **비공개 메뉴에 걸린 것만** 골라 그 칸만 갱신한다(내용·순서는 그대로).
+     새 글은 저장할 때마다 같은 기준이 자동으로 걸리므로(visFloor) 이 버튼은 **이미 있는 글**용이다. */
+  const applyVis = async () => {
+    const be = backend();
+    if (!be) { toast('서버에 연결돼 있지 않습니다 — 브라우저 저장 모드에는 서버 권한 자체가 없습니다'); return; }
+    setVisBusy(true);
+    try {
+      let n = 0;
+      for (const coll of CONTENT_COLLECTIONS) {
+        const rows = await be.fetchList(coll);
+        const targets = rows.filter(r => visFloorOf(coll, r) !== 'public');
+        if (targets.length) n += await be.refreshVis(coll, targets, user?.id ?? null);
+      }
+      toast(n ? `글 ${n}건을 서버에서도 가렸습니다` : '비공개로 둔 메뉴에 글이 없습니다');
+    } catch (e) {
+      toast(e instanceof Error && e.message ? e.message : '적용하지 못했습니다');
+    }
+    setVisBusy(false);
+  };
   const revert = () => { setDraft(saved); setDraftRemoved(ms.removedBoards); };
 
   // 이탈 경고 — 미저장 변경이 있는데 상단바·다른 설정 탭으로 이동하려 하면 (테마와 동일 패턴)
@@ -1875,17 +1994,16 @@ function MenuPane() {
     if (!msLoaded || !bLoaded) return;
     let next: MenuGroupNode[] = saved
       .map(g => (g.href
-        ? (menuLabelFor(g.href, boards) === null ? null : g)
-        : { ...g, items: g.items.filter(it => menuLabelFor(it.href, boards) !== null) }))
+        ? (menuLabelFor(g.href, extraAll) === null ? null : g)
+        : { ...g, items: g.items.filter(it => menuLabelFor(it.href, extraAll) !== null) }))
       .filter((g): g is MenuGroupNode => !!g);
     const placed = new Set(next.flatMap(g => (g.href ? [g.href] : g.items.map(i => i.href))));
-    for (const b of boards) {
-      if (b.id === MAIN_BOARD_ID) continue;
-      const href = extraBoardHref(b.id);
+    for (const b of extraAll) {
+      const href = b.href;
       if (placed.has(href) || ms.removedBoards.includes(href)) continue;
-      const hi = next.findIndex(g => !g.href && g.items.some(i => i.href === '/board'));
+      const hi = next.findIndex(g => !g.href && g.items.some(i => i.href === b.anchor));
       if (hi >= 0) {
-        const at = next[hi].items.findIndex(i => i.href === '/board');
+        const at = next[hi].items.findIndex(i => i.href === b.anchor);
         next = next.map((g, i) => (i === hi
           ? { ...g, items: [...g.items.slice(0, at + 1), { href }, ...g.items.slice(at + 1)] } : g));
       } else {
@@ -1900,16 +2018,19 @@ function MenuPane() {
   const placedSet = new Set(tree.flatMap(g => (g.href ? [g.href] : g.items.map(i => i.href))));
   const unplaced = [
     ...FEATURES.filter(f => !placedSet.has(f.href)),
-    ...boards.filter(b => b.id !== MAIN_BOARD_ID)
-      .map(b => ({ href: extraBoardHref(b.id), label: b.name }))
-      .filter(x => !placedSet.has(x.href)),
+    // 게시판·갤러리·다이어리 등 여러 개로 만든 것도 여기 뜬다 (v2.0 사용자 요청) —
+    // 자동 배치된 자리가 마음에 안 들면 빼서 원하는 상위 메뉴로 다시 넣을 수 있다
+    ...extraAll.map(b => ({ href: b.href, label: b.name })).filter(x => !placedSet.has(x.href)),
   ];
 
   const patchGroup = (id: string, p: Partial<MenuGroupNode>) =>
     setTree(tree.map(g => (g.id === id ? { ...g, ...p } : g)));
   // 배치 해제 시 게시판이면 자동 편입 제외 목록에 (다시 배치하면 해제) — 드래프트에만
   const markRemoved = (hrefs: string[]) => {
-    const bs = hrefs.filter(h => h.startsWith('/board?b='));
+    // 추가 항목(게시판·섹션)은 빼 두면 자동 배치가 다시 넣지 않도록 기억한다 —
+    // 기억하지 않으면 빼는 순간 자동 배치가 원래 자리로 되돌려 놓는다
+    const known = new Set(extraAll.map(b => b.href));
+    const bs = hrefs.filter(h => known.has(h));
     if (bs.length) setDraftRemoved([...new Set([...removed, ...bs])]);
   };
   const removeGroup = (g: MenuGroupNode) => {
@@ -2079,6 +2200,33 @@ function MenuPane() {
               ))}
             </div>
           ))}
+          {/* 글에도 적용 (v2.0 사용자 요청) — 공개범위를 서버까지 적용한다 */}
+          <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+            <b style={{ fontSize: 13 }}>열람 비공개 처리</b>
+            <div className="d" style={{ marginTop: 4, lineHeight: 1.7 }}>
+              위 공개범위는 <b>화면에서 가리는 것</b>이라, 주소나 API를 직접 부르면 글이 그대로 나옵니다.
+              이 버튼을 누르면 <b>이미 올라간 글의 공개범위를 서버에 적용</b>해 서버가 아예 내주지 않게 합니다
+              — 「비로그인 숨김」은 회원공개로, 「관리자만」은 비공개로.
+              <br />
+              <b>지금부터 쓰는 글은 누르지 않아도 그렇게 저장됩니다.</b>{' '}
+              <span style={{ color: 'var(--accent)' }}>좁히기만 하고 넓히지는 않습니다</span> —
+              나중에 다시 공개로 바꾸려면 각 글의 공개범위를 직접 되돌려야 합니다.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+              <button className="btn btn-dark" disabled={visBusy || dirty}
+                onClick={() => setVisAsk(true)}>
+                {visBusy ? '적용 중…' : dirty ? 'SAVE 먼저' : '글에도 적용'}
+              </button>
+            </div>
+          </div>
+          <ConfirmModal open={visAsk} title="글 공개범위를 서버에 적용할까요?"
+            body={'비공개로 둔 메뉴의 글이 서버에서도 가려집니다. 각 글의 공개범위가 바뀌므로, 되돌리려면 글마다 직접 고쳐야 합니다.'}
+            onClose={() => setVisAsk(false)}
+            buttons={[
+              { label: 'CANCEL', kind: 'ghost', onClick: () => setVisAsk(false) },
+              { label: '적용', kind: 'dark', onClick: () => { setVisAsk(false); void applyVis(); } },
+            ]} />
+
           {/* 이미지 저장 방지 (v1.9) — 영역별 우클릭·드래그 차단, 관리자 제외 · 즉시 반영 */}
           <div style={{ marginTop: 18 }}>
             <b style={{ fontSize: 13 }}>이미지 저장 방지</b>
@@ -2299,8 +2447,16 @@ function ThreadPane() {
   const [settings, patch] = useThreadSettings();
   const [works] = useLocalList<ThreadWork>('ohome.threads.v1', THREAD_SEED);
   const del = useConfirmDelete();
+  /* 분류는 감상타래마다 따로 (v2.0 사용자 요청) — 여러 개로 만들었으면 어느 것의 분류를
+     고칠지 먼저 고른다. 하나뿐이면 고를 것이 없으니 선택 줄을 아예 두지 않는다. */
+  const { list } = useSections();
+  const secs = list('threads');
+  const [secId, setSecId] = useState(MAIN_SEC);
+  const cur = secs.find(s => s.id === secId) ? secId : MAIN_SEC;
+  const cats = threadCats(settings, cur);
+  const setCats = (next: ThreadCat[]) => patch(threadCatsPatch(settings, cur, next));
   const patchCat = (id: string, p: Partial<ThreadCat>) =>
-    patch({ cats: settings.cats.map(c => (c.id === id ? { ...c, ...p } : c)) });
+    setCats(cats.map(c => (c.id === id ? { ...c, ...p } : c)));
   return (
     <div className="set-sec">
       <h3>기본 보기</h3>
@@ -2316,8 +2472,18 @@ function ThreadPane() {
       </div>
 
       <h3 style={{ marginTop: 26 }}>분류 리스트</h3>
-      <div className="d">작품 분류 뱃지 — 이름 · 배경/테두리/글씨색 · ⠿ 드래그로 순서 · 추가/삭제</div>
-      <DragList items={settings.cats} keyOf={c => c.id} onReorder={cats => patch({ cats })}
+      <div className="d">
+        작품 분류 뱃지 — 이름 · 배경/테두리/글씨색 · ⠿ 드래그로 순서 · 추가/삭제
+        {secs.length > 1 && <><br />감상타래마다 따로 정합니다 — <b>손대기 전까지는 기본 감상타래의 분류를 그대로 씁니다</b></>}
+      </div>
+      {secs.length > 1 && (
+        <div className="mini-seg" style={{ flexWrap: 'wrap', marginBottom: 10 }}>
+          {secs.map(s => (
+            <button key={s.id} className={cur === s.id ? 'on' : ''} onClick={() => setSecId(s.id)}>{s.name}</button>
+          ))}
+        </div>
+      )}
+      <DragList items={cats} keyOf={c => c.id} onReorder={next => setCats(next)}
         render={c => (
           <div className="set-row" style={{ width: '100%' }}>
             <div className="l" style={{ display: 'flex', gap: 11, alignItems: 'center' }}>
@@ -2335,9 +2501,9 @@ function ThreadPane() {
               <ColorField value={c.fg ?? '#ffffff'} onChange={hex => patchCat(c.id, { fg: hex })} />
               <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 10.5 }}
                 onClick={() => {
-                  const used = works.filter(w => w.catId === c.id).length;
+                  const used = works.filter(w => w.catId === c.id && inSection(w.secId, cur)).length;
                   del.ask(`분류 「${c.label}」를 삭제하시겠습니까?`,
-                    () => patch({ cats: settings.cats.filter(x => x.id !== c.id) }),
+                    () => setCats(cats.filter(x => x.id !== c.id)),
                     used > 0 ? `이 분류의 타래 ${used}개는 유지되지만 분류가 「기타」로 표시됩니다.` : undefined);
                 }}>DELETE</button>
             </div>
@@ -2345,7 +2511,7 @@ function ThreadPane() {
         )} />
       <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
         <button className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 11 }}
-          onClick={() => patch({ cats: [...settings.cats, { id: newId(), label: '새 분류' }] })}>
+          onClick={() => setCats([...cats, { id: newId(), label: '새 분류' }])}>
           ＋ ADD
         </button>
       </div>
