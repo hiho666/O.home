@@ -33,6 +33,10 @@ function WriteInner() {
   }, [board.cats.length]);
   const [secret, setSecret] = useState(false);
   const [notice, setNotice] = useState(false);
+  // 태그 (v2.0 사용자 요청) — 쉼표로 구분해 입력, 저장할 때 배열로
+  const [tagsText, setTagsText] = useState('');
+  const parseTags = (s: string) =>
+    [...new Set(s.split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean))];
   const [foldType, setFoldType] = useState<FoldType | 'none'>('none');
   const [foldLabel, setFoldLabel] = useState('');
   // 티켓 스킨 대표 이미지 (v1.9) — 본문에 삽입한 이미지 중 선택 + 16:9 썸네일 크롭
@@ -65,6 +69,7 @@ function WriteInner() {
     setCategory(p.category);
     setSecret(p.secret); setNotice(p.notice);
     setFoldType(p.fold?.type ?? 'none'); setFoldLabel(p.fold?.label ?? '');
+    setTagsText((p.tags ?? []).join(', '));
     setThumbSrc(p.thumbSrc); setThumbCrop(p.thumbCrop);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editPid, postsLoaded, posts]);
@@ -91,6 +96,7 @@ function WriteInner() {
         authored: writeMode === 'editor' ? 'editor' : undefined,
         category,
         secret, notice: isAdmin ? notice : p.notice,
+        tags: parseTags(tagsText),
         fold: foldType === 'none' ? null : { type: foldType, label: foldType === 'custom' ? foldLabel : undefined },
         thumbSrc, thumbCrop,
       } : p)));
@@ -103,6 +109,7 @@ function WriteInner() {
       mode: writeMode === 'md' ? 'md' : 'html', category,
       author: user.nickname, authorId: user.id, date: new Date().toISOString(),
       secret, notice: isAdmin && notice,
+      tags: parseTags(tagsText),
       fold: foldType === 'none' ? null : { type: foldType, label: foldType === 'custom' ? foldLabel : undefined },
       comments: [],
       boardId: board.id,   // 소속 게시판 (5.2 다중 게시판)
@@ -183,6 +190,12 @@ function WriteInner() {
               <label className="k-label" style={{ width: 60 }}>말머리</label>
               <KSelect minWidth={130} value={category} onChange={setCategory}
                 options={board.cats.map(x => ({ value: x.label, label: x.label }))} placeholder='말머리 선택' />
+            </div>
+            {/* 태그 (v2.0 사용자 요청) — 목록의 작성자 왼쪽에 나열되고 검색에 걸린다 */}
+            <div className="form-row">
+              <label className="k-label" style={{ width: 60 }}>태그</label>
+              <KInput value={tagsText} onChange={e => setTagsText(e.target.value)}
+                placeholder="쉼표로 구분" style={{ flex: 1 }} />
             </div>
             <div style={{ display: 'grid', gap: 9 }}>
               <KCheck label="비밀글 (관리자와 나만 열람)" checked={secret} onChange={setSecret} />

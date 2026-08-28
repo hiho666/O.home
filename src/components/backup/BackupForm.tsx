@@ -73,6 +73,10 @@ export function BackupForm({ initial }: { initial: BackupPost | null }) {
   const secCats = galleryCatsOf(boardSet, secId);
   const galleryCats = secCats.length ? secCats : DEFAULT_GALLERY_CATS;
   const [category, setCategory] = useState(initial?.category ?? '');
+  // 태그 (v2.0 사용자 요청) — 쉼표로 구분해 입력, 저장할 때 배열로
+  const [tagsText, setTagsText] = useState((initial?.tags ?? []).join(', '));
+  const parseTags = (v: string) =>
+    [...new Set(v.split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean))];
   // 목록이 로드되면 첫 말머리를 기본값으로 (등록 화면)
   useEffect(() => {
     if (!category && galleryCats[0]) setCategory(galleryCats[0].label);
@@ -111,7 +115,7 @@ export function BackupForm({ initial }: { initial: BackupPost | null }) {
         id: newId(), title: title.trim(), type,
         images: imageIds, phList: files.length ? [] : ['cool'],
         thumbCrop: files[0]?.crop, // 대표 이미지 크롭 (6.1)
-        desc, category, madeDate: madeDate || undefined,
+        desc, category, tags: parseTags(tagsText), madeDate: madeDate || undefined,
         date: new Date().toISOString(), author: user.nickname, authorId: user.id,
         visibility,
         fold: foldType === 'none' ? null : { type: foldType, label: foldType === 'custom' ? foldLabel : undefined },
@@ -124,7 +128,7 @@ export function BackupForm({ initial }: { initial: BackupPost | null }) {
         ...x, title: title.trim(), type,
         images: imageIds, phList: files.length ? [] : x.phList,
         thumbCrop: files[0]?.crop,
-        desc, category, madeDate: madeDate || undefined, visibility,
+        desc, category, tags: parseTags(tagsText), madeDate: madeDate || undefined, visibility,
         fold: foldType === 'none' ? null : { type: foldType, label: foldType === 'custom' ? foldLabel : undefined },
       } : x));
       toast('저장되었습니다');
@@ -211,6 +215,11 @@ export function BackupForm({ initial }: { initial: BackupPost | null }) {
               {/* 말머리 목록은 환경설정 > 게시판 관리에서 관리 (v2.0 — 예전에는 코드에 박혀 있었다) */}
               <KSelect minWidth={120} value={category} onChange={setCategory}
                 options={galleryCats.map(c => ({ value: c.label, label: c.label }))} />
+            </div>
+            {/* 태그 (v2.0 사용자 요청) — 목록·카드에 나열되고 검색에 걸린다 */}
+            <div className="form-row">
+              <label className="k-label" style={{ width: 70 }}>태그</label>
+              <KInput value={tagsText} onChange={e => setTagsText(e.target.value)} placeholder="쉼표로 구분" style={{ flex: 1 }} />
             </div>
             <div className="form-row">
               <label className="k-label" style={{ width: 70 }}>제작일 (선택)</label>

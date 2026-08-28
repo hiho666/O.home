@@ -1527,6 +1527,16 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 .panel.flush{overflow:hidden;padding:4px 0}
 .board-list{padding:6px 0}
 .brow{display:grid;grid-template-columns:70px 1fr 90px 90px;gap:12px;align-items:center;padding:13px 20px;border-bottom:1px solid var(--line);font-size:calc(13px*var(--fs,1));cursor:var(--cur-pointer,pointer);transition:.13s}
+/* 제목 칸 안에서 태그를 오른쪽 끝에 (v2.0 사용자 요청 — 작성자 왼쪽).
+   칸을 따로 만들면 행마다 그리드가 독립이라 작성자 열이 어긋난다 — 제목 칸 안에서 민다 */
+.brow .tcell{min-width:0;display:flex;align-items:center;gap:10px}
+.brow .tcell>b{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.brow .tags{flex-shrink:0;max-width:45%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:calc(10.5px*var(--fs,1))}
+.brow .tags i{font-style:normal;color:color-mix(in srgb,var(--accent) 65%,var(--faint));margin-left:7px}
+.brow .tags i:first-child{margin-left:0}
+@media (max-width:640px){.brow .tags{display:none}} /* 좁은 화면에서는 제목 우선 */
+/* 메타 줄에 섞어 쓰는 태그 표기 (v2.0 — 갤러리 카드·리스트·상세) */
+.tag-in{font-style:normal;color:color-mix(in srgb,var(--accent) 65%,var(--faint));margin-left:7px}
 .brow:last-child{border-bottom:none}
 .brow:hover{background:#f4f5f7}
 .brow .cat{font-size:calc(10px*var(--fs,1));text-align:center}
