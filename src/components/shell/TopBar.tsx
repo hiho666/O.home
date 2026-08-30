@@ -17,7 +17,7 @@ import { useToast } from '@/components/ui/Toast';
 import { KToggle } from '@/components/ui/Kit';
 import {
   Notif, NotifType, NOTIF_EVENT, NOTIF_TYPE_LABEL,
-  readNotifs, markRead, markAllRead, clearReadNotifs, notifSettings, setNotifSetting, syncNotifs,
+  readNotifs, markRead, markAllRead, clearReadNotifs, notifSettings, setNotifSetting, syncNotifs, selfTestNotif,
 } from '@/lib/notifStore';
 import { subscribeTable } from '@/lib/db';
 
@@ -273,6 +273,11 @@ export function TopBar() {
                       <KToggle checked={mySet[k]} onChange={v => setNotifSetting(user.id, k, v)} />
                     </label>
                   ))}
+                {/* 전달 자가진단 (v2.0) — 서버 저장→읽기를 실제로 해 보고 결과를 알려 준다 */}
+                <button className="all" style={{ marginTop: 2 }}
+                  onClick={async () => { toast(await selfTestNotif(user.id)); void syncNotifs(user.id, true); }}>
+                  알림 전달 확인
+                </button>
               </div>
             )}
           </div>

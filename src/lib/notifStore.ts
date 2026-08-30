@@ -8,7 +8,7 @@
 // **행 주인(authorId)을 받는 사람으로** 적으므로 서버 규칙상 받는 사람과 관리자만 읽고 지울 수 있다.
 // 받는 쪽은 접속·벨 열기·실시간 구독으로 받아 가고(TopBar), 기기 목록은 그대로 캐시로 쓴다.
 import { newId } from './postStore';
-import { isServerMode } from './backend';
+import { isServerMode, backend } from './backend';
 import { fetchList, syncList } from './db';
 import { currentUserId } from './currentUser';
 
@@ -107,6 +107,33 @@ export function pushNotif(n: {
   sendToServer(row);
 }
 
+/**
+ * 관리자(들)에게 알림 (v2.0 포크 제보 후 정비).
+ *
+ * 예전에는 받는 사람을 문자 그대로 'admin'으로 적었다 — 목업 관리자 id라서 **서버 모드에서는
+ * 실제 관리자 uid와 절대 일치하지 않아** 방명록 알림이 관리자에게 영영 표시되지 않았다.
+ * 회원 목록(공개 읽기)에서 role이 admin인 실제 id를 찾아 그 앞으로 보낸다. 여러 명이면 전원,
+ * 지금 로그인한 사람 본인은 뺀다. 브라우저 저장 모드에서는 지금까지처럼 'admin'(목업 id).
+ */
+let adminIdsCache: string[] | null = null;
+async function adminIds(): Promise<string[]> {
+  if (!isServerMode()) return ['admin'];
+  if (adminIdsCache) return adminIdsCache;
+  try {
+    const ms = await backend()!.listMembers();
+    adminIdsCache = ms.filter(m => m.role === 'admin').map(m => m.id);
+  } catch { return []; }   // 캐시하지 않는다 — 다음 알림 때 다시 시도
+  return adminIdsCache;
+}
+export function notifyAdmins(n: { type: NotifType; title: string; body?: string; href: string; dedupeKey?: string }) {
+  void adminIds().then(ids => {
+    for (const id of ids) {
+      if (id === currentUserId()) continue;   // 본인 행동은 본인에게 알리지 않는다
+      pushNotif({ ...n, toUserId: id });
+    }
+  });
+}
+
 /* ---------- 서버 배달 (v2.0) ---------- */
 /** 서버 행 — 받는 사람을 주인으로, 나만보기로 적는다 (읽기·수정·삭제가 받는 사람·관리자로 잠긴다) */
 const asRow = (n: Notif) => ({ ...n, authorId: n.toUserId, visibility: 'private' as const });
@@ -123,6 +150,37 @@ function mirrorToServer(prev: Notif[], next: Notif[]) {
   if (!isServerMode() || (!prev.length && !next.length)) return;
   void syncList('notifications', prev.map(asRow), next.map(asRow), currentUserId())
     .catch(() => { /* 규칙 미적용 포크 등 — 기기 목록은 이미 반영됨 */ });
+}
+
+/**
+ * 알림 전달 자가진단 (v2.0 포크 제보 「여전히 안 와요」 대응) — 어디가 막혔는지 스스로 확인.
+ * 내 앞으로 시험 알림을 **서버에** 적고, 서버에서 되읽어 본 뒤 지운다.
+ * 결과 문구가 곧 안내다: 저장이 막히면 만들기 규칙, 읽기가 막히면 읽기 규칙 문제.
+ */
+export async function selfTestNotif(userId: string): Promise<string> {
+  if (!isServerMode()) return '브라우저 저장 모드입니다 — 알림은 이 브라우저 안에서만 동작합니다';
+  const now = new Date().toISOString();
+  const row = asRow({
+    id: newId(), type: 'comment', toUserId: userId, title: '알림 전달 확인',
+    href: '/', date: now, read: true, readAt: now,
+  });
+  try {
+    await syncList('notifications', [], [row], currentUserId());
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return `서버 저장 실패 — ${msg.slice(0, 80)} · 설치 SQL 재실행(수파베이스) 또는 Firestore 규칙 재부착(파이어베이스)이 필요합니다`;
+  }
+  try {
+    const rows = await fetchList('notifications') as unknown as Notif[];
+    const found = rows.some(r => r.id === row.id);
+    try { await syncList('notifications', [row], [], currentUserId()); } catch { /* 시험 행 정리 실패는 무시 */ }
+    return found
+      ? '정상 — 알림이 서버에 저장되고 읽혔습니다. 남이 남긴 알림은 접속·벨 열기 때 도착합니다'
+      : '저장은 됐지만 읽기에 안 보입니다 — 보안 규칙(읽기)을 최신으로 다시 적용해 주세요';
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return `서버 읽기 실패 — ${msg.slice(0, 80)} · 보안 규칙을 최신으로 다시 적용해 주세요`;
+  }
 }
 
 let lastSync = 0;
