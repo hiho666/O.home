@@ -113,8 +113,20 @@ export const bodyVisibility = (l: { visibility: Visibility; password?: string })
 
 export const TRPG_BODY_SEED: TrpgLogBody[] = [];
 
-/** № 자리 표시 — 직접 입력한 텍스트가 있으면 그대로, 없으면 자동 № 0XX */
-export const logNo = (l: TrpgLog) => l.noText || `№ ${String(l.no).padStart(3, '0')}`;
+/** 날짜 기준 번호 — 가장 오래된 로그가 1번. 날짜 없는 로그는 날짜 있는 것 뒤에 등록 순서대로.
+ *  번호를 저장하지 않고 매번 계산하므로, 옛 날짜 로그를 나중에 올려도 번호가 꼬이지 않는다 */
+export function logDateCmp(a: TrpgLog, b: TrpgLog): number {
+  if (a.date && b.date && a.date !== b.date) return a.date < b.date ? -1 : 1;
+  if (!!a.date !== !!b.date) return a.date ? -1 : 1;
+  return a.no - b.no;
+}
+export function logNumbers(logs: TrpgLog[]): Map<string, number> {
+  return new Map([...logs].sort(logDateCmp).map((l, i) => [l.id, i + 1]));
+}
+
+/** № 자리 표시 — 날짜순 번호 (직접 입력하던 № 표기는 날짜 정렬과 꼬여서 없앴다) */
+export const logNo = (l: TrpgLog, nums?: Map<string, number>) =>
+  `№ ${String(nums?.get(l.id) ?? l.no).padStart(3, '0')}`;
 
 /** 본문이 HTML 문서인지 자동 판별 (4.3 — 확장자와 무관하게 내용 기준).
  *  직접 쓴 글에 태그처럼 보이는 문자가 섞이면 오판할 수 있으므로, 로그에 `bodyHtml`이
@@ -162,8 +174,12 @@ export const DOTORI_STATUS_LABEL: Record<DotoriStatus, string> = {
 export interface DotoriStatusStyle { label: string; bg: string; border: string; fg: string }
 export interface TrpgSettings {
   statuses: Record<DotoriStatus, DotoriStatusStyle>;
+  /** TRPG 로그 목록 정렬 — 날짜 최신순 / 날짜 오래된순 / 직접 배치(드래그) */
+  logSort: TrpgLogSort;
 }
+export type TrpgLogSort = 'date-desc' | 'date-asc' | 'manual';
 export const DEFAULT_TRPG_SETTINGS: TrpgSettings = {
+  logSort: 'date-desc',
   statuses: {
     // 기존 하드코딩 뱃지 색 계승 (pledge: 반투명 잉크 → hex 근사 / confirmed: 포인트 레드)
     pledge: { label: '공수표', bg: '#23262b', border: '#b9bdc4', fg: '#ffffff' },
@@ -191,7 +207,10 @@ export function useTrpgSettings(): [TrpgSettings, (patch: Partial<TrpgSettings>)
       const raw = getRawSetting(TRPG_SET_KEY);
       if (raw) {
         const p = JSON.parse(raw) as Partial<TrpgSettings>;
-        setSt({ statuses: { ...DEFAULT_TRPG_SETTINGS.statuses, ...(p.statuses ?? {}) } });
+        setSt({
+          statuses: { ...DEFAULT_TRPG_SETTINGS.statuses, ...(p.statuses ?? {}) },
+          logSort: p.logSort ?? DEFAULT_TRPG_SETTINGS.logSort,
+        });
       }
     } catch { /* 기본값 */ }
     setLoaded(true);

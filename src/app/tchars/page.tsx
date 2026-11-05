@@ -35,7 +35,7 @@ export default function TCharsPage() {
   return (
     <section className="page">
       <div className="page-head">
-        <PageTitle>TRPG CHARACTERS</PageTitle>
+        <PageTitle href="/tchars">2차 CP 자랑존</PageTitle>
         <EditableDesc k="tchars-desc" def="1:1 인장 카드 — 클릭하면 표정과 소개를 볼 수 있습니다" />
         <div className="head-actions">
           <SearchBar placeholder="이름·시나리오·룰·역할 검색" onSearch={setQ} />

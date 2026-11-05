@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useSectionParam, filterSection, sectionSetter, secStamp } from '@/lib/sectionStore';
 import { useLocalList, newId } from '@/lib/postStore';
-import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, decodeLogText, logNo, saveLogBody } from '@/lib/galleryStore';
+import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, decodeLogText, logNo, logNumbers, logDateCmp, saveLogBody, useTrpgSettings, TrpgLogSort } from '@/lib/galleryStore';
 import { Relation, REL_SEED } from '@/lib/charStore';
 import { SearchBar, KInput, KTextarea, KRadio, KSelect, KDate, Pager } from '@/components/ui/Kit';
 import { Modal } from '@/components/ui/Modal';
@@ -38,6 +38,10 @@ function TrpgPageInner() {
   const [bodies, setBodies] = useLocalList<TrpgLogBody>('ohome.trpgbody.v1', TRPG_BODY_SEED);
   const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
   const { editOn } = useMainStore();          // 편집모드 — 상단바 토글 (다른 목록과 공통)
+  // 목록 정렬 (사이트 설정 — 관리자가 고르면 방문자도 같은 순서로 본다)
+  const [trpgSet, patchTrpgSet] = useTrpgSettings();
+  const sortMode = trpgSet.logSort;
+  const manualSort = sortMode === 'manual';
   const [filter, setFilter] = useState<string>('all');
   const [skin, setSkin] = useState<'ticket' | 'basic'>('ticket');
   const [q, setQ] = useState('');
@@ -52,7 +56,6 @@ function TrpgPageInner() {
   }, []);
   // ADD LOG 모달
   const [addOpen, setAddOpen] = useState(false);
-  const [nNo, setNNo] = useState('');          // № 자리 표시 텍스트 — 비우면 자동 № 0XX
   const [nVis, setNVis] = useState<'public' | 'member' | 'private'>('public'); // 접근권한
   const [nListHidden, setNListHidden] = useState(false);   // 목록 표시 여부 (v2.0 — 접근권한과 별개)
   const [nPw, setNPw] = useState('');          // 열람 비밀번호 (선택)
@@ -86,6 +89,8 @@ function TrpgPageInner() {
   // 목록에 뜰지는 오직 listHidden — 접근권한(visibility)은 "누가 열 수 있는지"만 정하고
   // 목록에 나오는지는 정하지 않는다 (v2.0 사용자 확정: "나만보기여도 목록에는 표시돼야해").
   // 열 수 있는지는 상세 페이지가 다시 독립적으로 확인하므로, 목록에 뜬다고 내용이 새지 않는다
+  // 티켓 번호 = 날짜순 번호 (가장 오래된 로그가 001) — 정렬 방식과 무관하게 항상 날짜 기준
+  const nums = useMemo(() => logNumbers(logs), [logs]);
   const canOpen = (l: TrpgLog) => isAdmin || l.visibility === 'public' || (l.visibility === 'member' && !!user);
   const visible = logs
     // 목록 숨김 — 관리자도 편집모드가 아니면 안 보인다(목록을 정리해 두는 용도라, v2.0 사용자 요청).
@@ -93,6 +98,10 @@ function TrpgPageInner() {
     .filter(l => !l.listHidden || (isAdmin && editOn))
     .filter(l => filter === 'all' || (filter === 'none' ? !l.relId : l.relId === filter))
     .filter(l => !q || l.title.includes(q) || l.writer.includes(q) || l.withText.includes(q));
+  // 날짜순이면 저장된 순서 대신 날짜로 — 직접 배치(드래그)는 「직접 배치」일 때만
+  if (sortMode === 'date-asc') visible.sort(logDateCmp);
+  // 최신순에서도 날짜 없는 로그는 맨 뒤로
+  else if (sortMode === 'date-desc') visible.sort((a, b) => !!a.date !== !!b.date ? logDateCmp(a, b) : -logDateCmp(a, b));
   // 정렬 기준은 저장된 순서 — 편집모드에서 드래그로 바꾼 순서가 그대로 목록에 반영된다 (v2.0).
   // 새 로그는 앞에 넣으므로 기본은 지금까지처럼 최신순이고, № 번호는 표시용으로만 남는다.
 
@@ -104,7 +113,7 @@ function TrpgPageInner() {
   // · 기본형(2열 그리드)은 DragList가 세로 한 줄 전제라 그대로 못 쓴다 — 자리 미리보기는 그대로 두되,
   //   저장(서버 쓰기)은 손을 뗄 때 한 번만 하도록 이 페이지에서 직접 구현했다. 예전 cardSort는 지나는
   //   자리마다 저장을 불러서(끄는 동안 수십 번) 서버 모드에서 뚝뚝 끊겨 보였다 — 그 원인 제거
-  const gridSort = editOn && isAdmin;
+  const gridSort = editOn && isAdmin && manualSort;
   const [gridPreview, setGridPreview] = useState<TrpgLog[] | null>(null);
   const gridFromRef = useRef<number | null>(null);
   const basicShown = gridPreview ?? visible;
@@ -137,7 +146,7 @@ function TrpgPageInner() {
   const [ordFor, setOrdFor] = useState<{ id: string; x: number; y: number } | null>(null);
   const ordIdx = ordFor ? visible.findIndex(l => l.id === ordFor.id) : -1;
   const openOrder = (e: React.MouseEvent, id: string) => {
-    if (!isAdmin) return;
+    if (!isAdmin || !manualSort) return;
     e.preventDefault();
     setOrdFor({ id, x: e.clientX, y: e.clientY });
   };
@@ -191,7 +200,6 @@ function TrpgPageInner() {
     const log: TrpgLog = {
       id,
       no: Math.max(0, ...logs.map(l => l.no)) + 1, // 내부 순번 (정렬용)
-      noText: nNo.trim() || undefined,             // № 자리 표시 텍스트 — 비우면 자동 № 0XX
       title: nTitle.trim(), catchphrase: nCatch.trim() || undefined,
       writer: nWriter.trim(), withText: nWith.trim(),
       relId: nRel === 'none' ? undefined : nRel,
@@ -222,7 +230,7 @@ function TrpgPageInner() {
     // 본문은 id로만 찾으므로 순서는 아무 의미가 없다.
     setBodies([...bodies, body]);
     setAddOpen(false);
-    setNNo(''); setNVis('public'); setNPw(''); setNListHidden(false); setNTitle(''); setNCatch(''); setNWriter(''); setNWith(''); setNBody(''); setNFileName(''); setNDate(''); setNFile(null);
+    setNVis('public'); setNPw(''); setNListHidden(false); setNTitle(''); setNCatch(''); setNWriter(''); setNWith(''); setNBody(''); setNFileName(''); setNDate(''); setNFile(null);
     setNThumb(null); setNThumbUrl(''); setNThumbCrop(undefined);
     toast(nFile ? '로그가 등록되었습니다 — 원본 파일도 보관됩니다' : '로그가 등록되었습니다');
   };
@@ -241,13 +249,13 @@ function TrpgPageInner() {
       <div className="stub-line" />
       <div className={`wide ${!l.thumbId && !l.thumbColor ? `ph ${l.ph}` : ''}`} style={thumbStyle(l)}>
         {l.thumbId && <CroppedBlobImg fileRef={l.thumbId} crop={l.thumbCrop} />}
-        <span className="no">{l.noText ? `ADMIT ONE · ${l.noText}` : `ADMIT ONE · LOG ${String(l.no).padStart(3, '0')}`}</span>
+        <span className="no">{`ADMIT ONE · LOG ${String(nums.get(l.id) ?? l.no).padStart(3, '0')}`}</span>
         {!l.thumbId && !l.thumbColor && <span>WIDE THUMBNAIL</span>}
       </div>
       <div className="stub">
         <div className="sc-title" style={l.serifTitle ? { fontFamily: 'var(--serif)', letterSpacing: '.12em' } : undefined}>
           {/* 다른 목록형 페이지와 같은 드래그 손잡이 — 잡아 들어야 끌리게 (v2.0) */}
-          {editOn && <span className="drag-h" style={{ marginRight: 8 }}>⠿</span>}
+          {editOn && manualSort && <span className="drag-h" style={{ marginRight: 8 }}>⠿</span>}
           {l.title}
         </div>
         {/* 편집모드에서만 — 지금 목록 숨김이라 관리자에게만 예외로 보이는 중임을 표시 (v2.0) */}
@@ -260,7 +268,7 @@ function TrpgPageInner() {
         {l.writer && <div className="row"><b>라이터</b> {l.writer}</div>}
         {l.withText && <div className="row"><b>동행</b> {l.withText}</div>}
         {l.date && <div className="row"><b>날짜</b> {l.date.replace(/-/g, '.')}</div>}
-        <div className="adm"><span>{site.subtitle}</span><span>{logNo(l)}</span></div>
+        <div className="adm"><span>{site.subtitle}</span><span>{logNo(l, nums)}</span></div>
       </div>
     </div>
   );
@@ -282,7 +290,7 @@ function TrpgPageInner() {
               // 다른 목록형 페이지와 같은 DragList — 손잡이를 들어 부드럽게 밀어내고 놓으면 안착 (v2.0)
               <DragList items={pageLogs} keyOf={l => l.id}
                 onReorder={reorderPage}
-                disabled={!(editOn && isAdmin)}
+                disabled={!(editOn && isAdmin && manualSort)}
                 render={l => <Ticket l={l} />} />
             )
             : (
@@ -295,7 +303,7 @@ function TrpgPageInner() {
                   <div key={l.id} className="list-item" {...gridDragProps(logStart + i)}
                     onContextMenu={e => openOrder(e, l.id)}
                     onClick={() => { if (!editOn) router.push(`/trpg/${l.id}`); }}>
-                    {editOn && <span className="drag-h">⠿</span>}
+                    {editOn && manualSort && <span className="drag-h">⠿</span>}
                     <div className={`th ${!l.thumbId && !l.thumbColor ? `ph ${l.ph}` : ''}`} style={{ ...thumbStyle(l), position: 'relative' }}>
                       {l.thumbId && <CroppedBlobImg fileRef={l.thumbId} crop={l.thumbCrop} />}
                     </div>
@@ -346,6 +354,18 @@ function TrpgPageInner() {
               단발 <small>{counts['none']}</small>
             </div>
           )}
+          {/* 정렬 — 관리자만 바꾼다(사이트 설정이라 방문자에게도 같은 순서로 보인다) */}
+          {isAdmin && (
+            <>
+              <h4 style={{ marginTop: 18 }}>정렬</h4>
+              {([['date-desc', '날짜 최신순'], ['date-asc', '날짜 오래된순'], ['manual', '직접 배치']] as [TrpgLogSort, string][]).map(([v, lb], i) => (
+                <React.Fragment key={v}>
+                  {i > 0 && <div style={{ height: 7 }} />}
+                  <KRadio name="tsort" value={v} current={sortMode} onChange={x => patchTrpgSet({ logSort: x as TrpgLogSort })} label={lb} />
+                </React.Fragment>
+              ))}
+            </>
+          )}
           {/* 모바일은 항상 기본형 — 스킨 선택 숨김 (v1.9) */}
           {!isMobile && (
             <>
@@ -368,9 +388,6 @@ function TrpgPageInner() {
         <div style={{ display: 'grid', gap: 9 }}>
           <div style={{ display: 'flex', gap: 8 }}>
             <KInput placeholder="시나리오 타이틀 (필수)" value={nTitle} onChange={e => setNTitle(e.target.value)} />
-            {/* № 자리 표시 텍스트 전체를 직접 입력 — 비우면 자동 № 0XX */}
-            <KInput placeholder="№ 표기 (선택 — 비우면 자동)" value={nNo} onChange={e => setNNo(e.target.value)}
-              style={{ maxWidth: 200 }} />
           </div>
           <KInput placeholder="캐치프레이즈 (선택)" value={nCatch} onChange={e => setNCatch(e.target.value)} />
           <div style={{ display: 'flex', gap: 8 }}>

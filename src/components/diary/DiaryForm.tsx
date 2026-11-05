@@ -1,17 +1,19 @@
 ﻿'use client';
-// 일기 작성/수정 공용 폼 (4.14) — 제목 · 날짜 · 무드 · 내용(MD) · 이미지 · 공개범위
+// 일기 작성/수정 공용 폼 (4.14) — 제목 · 날짜 · 무드 · 내용(서식 편집기) · 이미지 · 공개범위
 import React, { useState } from 'react';
 import { DiaryPost, Mood, moodTint } from '@/lib/diaryStore';
 import { Visibility } from '@/lib/charStore';
 import { newId } from '@/lib/postStore';
-import { KInput, KTextarea, KSelect, KDate } from '@/components/ui/Kit';
+import { KInput, KSelect, KDate } from '@/components/ui/Kit';
+import { RichEditor } from '@/components/ui/RichEditor';
+import { renderBody } from '@/lib/sanitize';
 import { DragList } from '@/components/ui/DragList';
 import { useConfirmDelete } from '@/components/ui/Modal';
 import { putBlob, useBlobUrl } from '@/lib/blobStore';
 import { useToast } from '@/components/ui/Toast';
 
 export interface DiaryFormValue {
-  title: string; date: string; moodId: string; body: string;
+  title: string; date: string; moodId: string; body: string; bodyHtml: boolean;
   imgIds: string[]; visibility: Visibility;
 }
 
@@ -37,7 +39,10 @@ export function DiaryForm({ initial, moods, onSave, onCancel }: {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [date, setDate] = useState(initial?.date ?? todayStr);
   const [moodId, setMoodId] = useState(initial?.moodId ?? moods[0]?.id ?? '');
-  const [body, setBody] = useState(initial?.body ?? '');
+  // 마크다운 없이 일반 게시판처럼 쓰도록 서식 편집기로 바꿨다 — 예전 마크다운 일기는
+  // 고칠 때 HTML로 한 번 바꿔서 편집기에 띄우고, 저장하면 새 형식(bodyHtml)으로 남는다
+  const [body, setBody] = useState(() =>
+    !initial?.body ? '' : initial.bodyHtml ? initial.body : renderBody('md', initial.body));
   const [imgs, setImgs] = useState<ImgItem[]>(() => (initial?.imgIds ?? []).map(r => ({ id: newId(), ref: r })));
   const [visibility, setVisibility] = useState<Visibility>(initial?.visibility ?? 'public');
   const del = useConfirmDelete();   // 이미지 제거도 경고를 거친다
@@ -46,7 +51,7 @@ export function DiaryForm({ initial, moods, onSave, onCancel }: {
     if (!title.trim()) { toast('제목을 입력해 주세요'); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast('날짜를 YYYY-MM-DD 형식으로 입력해 주세요'); return; }
     const imgIds = await Promise.all(imgs.map(i => (i.file ? putBlob(i.file) : Promise.resolve(i.ref!))));
-    onSave({ title: title.trim(), date, moodId, body, imgIds, visibility });
+    onSave({ title: title.trim(), date, moodId, body, bodyHtml: true, imgIds, visibility });
   };
 
   return (
@@ -75,8 +80,8 @@ export function DiaryForm({ initial, moods, onSave, onCancel }: {
           </div>
         </div>
         <div>
-          <label className="k-label" style={{ marginBottom: 6 }}>내용 — 마크다운 지원</label>
-          <KTextarea value={body} onChange={e => setBody(e.target.value)} style={{ minHeight: 180 }} />
+          <label className="k-label" style={{ marginBottom: 6 }}>내용</label>
+          <RichEditor value={body} onChange={setBody} placeholder="오늘의 일기를 적어 보세요" />
         </div>
         <label className="k-label" style={{ margin: 0 }}>이미지 (선택) — 본문 아래에 순서대로 표시 · ⠿ 순서</label>
         {imgs.length > 0 && (

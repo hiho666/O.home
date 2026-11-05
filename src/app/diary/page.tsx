@@ -29,7 +29,7 @@ function MoodIcon({ mood, size = 30 }: { mood?: Mood; size?: number }) {
 }
 
 function DiaryBody({ p, onOpen }: { p: DiaryPost; onOpen: (ids: string[], idx: number) => void }) {
-  const html = useMemo(() => renderBody('md', p.body), [p.body]);
+  const html = useMemo(() => renderBody(p.bodyHtml ? 'html' : 'md', p.body), [p.body, p.bodyHtml]);
   return (
     <div className="dy-body">
       <div className="post-body" dangerouslySetInnerHTML={{ __html: html }} />

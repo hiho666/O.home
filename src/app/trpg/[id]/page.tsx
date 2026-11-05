@@ -4,10 +4,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useHrefBlock } from '@/components/shell/MenuGuard';
-import { sectionHref, MAIN_SEC, secStamp, useSectionTitle } from '@/lib/sectionStore';
+import { sectionHref, MAIN_SEC, secStamp, useSectionTitle, filterSection } from '@/lib/sectionStore';
 import { useAuth } from '@/lib/auth';
 import { useLocalList } from '@/lib/postStore';
-import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, showAsHtml, decodeLogText, logNo, saveLogBody } from '@/lib/galleryStore';
+import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, showAsHtml, decodeLogText, logNo, logNumbers, saveLogBody } from '@/lib/galleryStore';
 import { Relation, REL_SEED, Character, CHAR_SEED, charGrant } from '@/lib/charStore';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { getBlob, putBlob, useBlobUrl } from '@/lib/blobStore';
@@ -56,6 +56,8 @@ export default function TrpgDetailPage() {
   const gotHeightRef = useRef(false);   // 안쪽에서 높이 보고가 왔는지 (안 오면 기본 높이로 되돌린다)
 
   const l = logs.find(x => x.id === id);
+  // 날짜순 번호 — 목록과 같은 기준(같은 섹션 안에서 가장 오래된 로그가 001)
+  const nums = useMemo(() => logNumbers(filterSection(logs, l?.secId ?? MAIN_SEC)), [logs, l?.secId]);
   /* 이 글이 속한 곳이 비공개면 주소로 들어와도 열리지 않게 (v2.0 사용자 요청).
      글 주소에는 섹션이 없어 MenuGuard가 못 막는다 — 글을 읽어 소속을 알아낸 여기서 판정한다.
      **다른 early return보다 먼저 불러야 한다**(훅이므로 렌더마다 개수가 같아야 한다) */
@@ -101,7 +103,7 @@ export default function TrpgDetailPage() {
   // 로그 정보 수정 — 메타 + 본문 교체(파일/직접 입력) + 썸네일 교체(이미지 크롭/단색·그라데이션)
   const [eOpen, setEOpen] = useState(false);
   const [e, setE] = useState({
-    noText: '', title: '', catchphrase: '', writer: '', withText: '',
+    title: '', catchphrase: '', writer: '', withText: '',
     relId: 'none', date: '', visibility: 'public' as TrpgLog['visibility'], password: '',
     listHidden: false,   // 목록 표시 여부 (v2.0 — 접근권한과 별개)
   });
@@ -149,7 +151,6 @@ export default function TrpgDetailPage() {
     }
     const nextLog: TrpgLog = {
       ...(l as TrpgLog),
-      noText: e.noText.trim() || undefined,
       title: e.title.trim(), catchphrase: e.catchphrase.trim() || undefined,
       writer: e.writer.trim(), withText: e.withText.trim(),
       relId: e.relId === 'none' ? undefined : e.relId,
@@ -322,12 +323,12 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
     <section className="page">
       <div className="page-head">
         <PageTitle href={tt.href}>{tt.title}</PageTitle>
-        <p>{logNo(l)}{[l.writer, l.withText].filter(Boolean).map(x => ` · ${x}`).join('')}{l.date ? ` · ${l.date.replace(/-/g, '.')}` : ''}</p>
+        <p>{logNo(l, nums)}{[l.writer, l.withText].filter(Boolean).map(x => ` · ${x}`).join('')}{l.date ? ` · ${l.date.replace(/-/g, '.')}` : ''}</p>
         <div className="head-actions">
           {rel && <button className="btn btn-dark" onClick={() => router.push(`/rels/${rel.id}`)}>{rel.name} ›</button>}
           {isAdmin && <button className="btn btn-dark" onClick={() => {
             setE({
-              noText: l.noText ?? '', title: l.title, catchphrase: l.catchphrase ?? '', writer: l.writer,
+              title: l.title, catchphrase: l.catchphrase ?? '', writer: l.writer,
               withText: l.withText, relId: l.relId ?? 'none', date: l.date ?? '',
               visibility: l.visibility, password: l.password ?? '', listHidden: !!l.listHidden,
             });
@@ -419,9 +420,6 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
         <div style={{ display: 'grid', gap: 9 }}>
           <div style={{ display: 'flex', gap: 8 }}>
             <KInput placeholder="시나리오 타이틀 (필수)" value={e.title} onChange={ev => setE(s => ({ ...s, title: ev.target.value }))} />
-            {/* № 자리 표시 텍스트 전체를 직접 입력 — 비우면 자동 № 0XX */}
-            <KInput placeholder="№ 표기 (선택 — 비우면 자동)" value={e.noText} onChange={ev => setE(s => ({ ...s, noText: ev.target.value }))}
-              style={{ maxWidth: 200 }} />
           </div>
           <KInput placeholder="캐치프레이즈 (선택)" value={e.catchphrase} onChange={ev => setE(s => ({ ...s, catchphrase: ev.target.value }))} />
           <div style={{ display: 'flex', gap: 8 }}>

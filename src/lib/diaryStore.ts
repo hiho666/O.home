@@ -20,7 +20,9 @@ export interface DiaryPost {
   title: string;
   date: string;              // YYYY-MM-DD
   moodId: string;
-  body: string;              // MD
+  body: string;              // bodyHtml이면 HTML(서식 편집기), 아니면 옛 MD
+  /** 서식 편집기로 쓴 본문인지 — 없으면 예전 마크다운 일기 (불러올 때 그대로 MD로 렌더) */
+  bodyHtml?: boolean;
   imgIds: string[];          // 첨부 이미지 (IndexedDB)
   visibility: Visibility;
 }

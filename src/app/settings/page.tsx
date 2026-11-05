@@ -3096,10 +3096,11 @@ function FontRow({ f }: { f: FontDef }) {
 
   return (
     <div className="set-row">
-      <div className="l" style={{ minWidth: 0 }}>
+      {/* 이름이 아주 길어도(띄어쓰기 없는 긴 문자열 등) EDIT·DELETE가 밀려나지 않게 — 넘치면 … 로 자른다 */}
+      <div className="l" style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
         {/* 미리보기는 페어 반영 스택 — 영문 폰트+한글 페어면 한글이 페어 폰트로 보임 (v1.9) */}
         {/* familyOf가 페어까지 합쳐 주고 var(--serif) 같은 별칭도 원본 스택으로 풀어 준다 (v2.0) */}
-        <b style={{ fontFamily: familyOf(f.id), fontSize: 15 }}>{f.name} — 가나다 ABC 123</b>
+        <b title={f.name} style={{ fontFamily: familyOf(f.id), fontSize: 15, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name} — 가나다 ABC 123</b>
         <small style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {f.fileId
             ? `업로드 파일 — ${f.fileName ?? '폰트 파일'}${f.pairId ? ` · 한글 페어: ${fonts.find(x => x.id === f.pairId)?.name ?? ''}` : ''}`
@@ -3111,7 +3112,7 @@ function FontRow({ f }: { f: FontDef }) {
           onClick={() => setEditing(true)}>EDIT</button>
         {!f.locked && (
           <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 10.5 }}
-            onClick={() => del.ask(`폰트 「${f.name}」를 삭제하시겠습니까?`, () => removeFont(f.id),
+            onClick={() => del.ask(`폰트 「${f.name.length > 40 ? `${f.name.slice(0, 40)}…` : f.name}」를 삭제하시겠습니까?`, () => removeFont(f.id),
                 f.builtin
                   ? '기본 폰트는 목록에서만 빠집니다 — 아래 [복원] 버튼으로 되살릴 수 있고, 이 폰트를 쓰던 항목 표시는 그대로입니다.'
                   // 직접 등록한 폰트는 정의째 사라지므로 가리키던 자리도 함께 정리된다 (v2.0)
