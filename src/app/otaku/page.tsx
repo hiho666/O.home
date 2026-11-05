@@ -38,7 +38,7 @@ export default function TCharsPage() {
         <PageTitle href="/otaku">2차 CP 자랑존</PageTitle>
         <EditableDesc k="tchars-desc" def="1:1 인장 카드 — 클릭하면 표정과 소개를 볼 수 있습니다" />
         <div className="head-actions">
-          <SearchBar placeholder="이름·시나리오·룰·역할 검색" onSearch={setQ} />
+          <SearchBar placeholder="이름·장르·런·태그 검색" onSearch={setQ} />
           {isAdmin && <button className="btn btn-dark" onClick={() => router.push('/otaku/new')}>＋ ADD</button>}
         </div>
       </div>
@@ -64,7 +64,8 @@ export default function TCharsPage() {
               </div>
               <div className="bd">
                 <b className="nm">
-                  {c.name}
+                  {/* 이름을 감싸야 모바일에서 말줄임이 걸린다 (맨 글자는 flex 안에서 줄어들지 않음) */}
+                  <span className="nm-t">{c.name}</span>
                   {c.role && <span className="pill dark">{c.role}</span>}
                 </b>
                 <small className="meta">{[c.scenario, c.rule].filter(Boolean).join(' · ')}</small>
