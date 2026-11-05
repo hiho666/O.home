@@ -16,7 +16,7 @@ export const FEATURES: { href: string; label: string }[] = [
   { href: '/board', label: '리스트' },
   { href: '/gallery', label: '갤러리' },
   { href: '/loadb', label: '로드비' },
-  { href: '/tchars', label: '2차 CP 자랑존' },   // (구 TRPG 캐릭터) — 자놀 캐릭터와는 href로 구분
+  { href: '/otaku', label: '2차 CP 자랑존' },   // (구 TRPG 캐릭터) — 자놀 캐릭터와는 href로 구분
   { href: '/trpg', label: '로그 백업' },
   { href: '/dotori', label: '도토리' },
   { href: '/playlog', label: '플레이기록' },
@@ -50,7 +50,7 @@ export const DEFAULT_MENU: MenuItem[] = [
   {
     label: 'TRPG',
     children: [
-      { label: '2차 CP 자랑존', href: '/tchars' },
+      { label: '2차 CP 자랑존', href: '/otaku' },
       { label: '로그 백업', href: '/trpg' },
       { label: '도토리', href: '/dotori' },
       { label: '플레이기록', href: '/playlog' },

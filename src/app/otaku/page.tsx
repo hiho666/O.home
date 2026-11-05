@@ -35,11 +35,11 @@ export default function TCharsPage() {
   return (
     <section className="page">
       <div className="page-head">
-        <PageTitle href="/tchars">2차 CP 자랑존</PageTitle>
+        <PageTitle href="/otaku">2차 CP 자랑존</PageTitle>
         <EditableDesc k="tchars-desc" def="1:1 인장 카드 — 클릭하면 표정과 소개를 볼 수 있습니다" />
         <div className="head-actions">
           <SearchBar placeholder="이름·시나리오·룰·역할 검색" onSearch={setQ} />
-          {isAdmin && <button className="btn btn-dark" onClick={() => router.push('/tchars/new')}>＋ ADD</button>}
+          {isAdmin && <button className="btn btn-dark" onClick={() => router.push('/otaku/new')}>＋ ADD</button>}
         </div>
       </div>
 
@@ -49,12 +49,12 @@ export default function TCharsPage() {
           return (
             <div key={c.id} className="panel tc-card" {...sort(i)}
               style={{ cursor: 'var(--cur-pointer,pointer)', ...(sort(i) as { style?: React.CSSProperties }).style }}
-              onClick={() => { if (!editOn) router.push(`/tchars/${c.id}`); }}>
+              onClick={() => { if (!editOn) router.push(`/otaku/${c.id}`); }}>
               <div className="main" style={{ cursor: 'var(--cur-pointer,pointer)' }}>
                 <CroppedBlobImg fileRef={face?.imgId} crop={faceCrop(c, face)} ph={face?.ph ?? c.ph} />
                 {isAdmin && (
                   <div className="th-actions hv-actions">
-                    <button onClick={e => { e.stopPropagation(); router.push(`/tchars/${c.id}/edit`); }}>EDIT</button>
+                    <button onClick={e => { e.stopPropagation(); router.push(`/otaku/${c.id}/edit`); }}>EDIT</button>
                     <button className="del" onClick={e => {
                       e.stopPropagation();
                       del.ask(`「${c.name}」를 삭제하시겠습니까?`, () => setTchars(tchars.filter(x => x.id !== c.id)));

@@ -48,7 +48,7 @@ export type ImgProtectArea = 'board' | 'comm' | 'tchar' | 'chars' | 'rels';
 export const IMG_PROTECT_AREAS: { key: ImgProtectArea; label: string; paths: string[] }[] = [
   { key: 'board', label: '게시판 (갤러리·로드비 포함)', paths: ['/board', '/gallery', '/loadb'] },
   { key: 'comm', label: '커미션', paths: ['/comm', '/comm-apply'] },
-  { key: 'tchar', label: '2차 CP 자랑존', paths: ['/tchars'] },
+  { key: 'tchar', label: '2차 CP 자랑존', paths: ['/otaku'] },
   { key: 'chars', label: '자캐 (캐릭터)', paths: ['/chars'] },
   { key: 'rels', label: '자관', paths: ['/rels'] },
 ];
@@ -116,7 +116,7 @@ export const DEFAULT_MENU_SETTINGS: MenuSettings = {
 const KEY = 'ohome.menuset.v1';
 
 /** 주소를 바꾼 메뉴 (v2.0 사용자 요청) — 옛 이름이 그대로였던 것들 */
-const MOVED: Record<string, string> = { '/roadview': '/loadb', '/backup': '/gallery' };
+const MOVED: Record<string, string> = { '/roadview': '/loadb', '/backup': '/gallery', '/tchars': '/otaku' };
 
 /**
  * 저장된 메뉴의 옛 주소를 새 주소로 (v2.0).

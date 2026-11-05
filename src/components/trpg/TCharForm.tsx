@@ -173,7 +173,7 @@ export function TCharForm({ editId }: { editId?: string }) {
       setTchars([{ id: newId(), ph: 'cool', ...patch }, ...tchars]);
       toast('캐릭터가 등록되었습니다');
     }
-    router.push('/tchars');
+    router.push('/otaku');
   };
 
   const firstFace = faces.find(f => f.url || f.imgId);
@@ -263,7 +263,7 @@ export function TCharForm({ editId }: { editId?: string }) {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
-        <button className="btn btn-ghost" onClick={() => router.push('/tchars')}>CANCEL</button>
+        <button className="btn btn-ghost" onClick={() => router.push('/otaku')}>CANCEL</button>
         <button className="btn btn-dark" onClick={save}>{orig ? 'SAVE' : 'ADD'}</button>
       </div>
 

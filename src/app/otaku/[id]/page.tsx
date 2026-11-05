@@ -35,7 +35,7 @@ export default function TCharDetailPage() {
   if (!c) {
     return (
       <section className="page">
-        <div className="page-head"><PageTitle href="/tchars">2차 CP 자랑존</PageTitle><p>캐릭터를 찾을 수 없습니다</p></div>
+        <div className="page-head"><PageTitle href="/otaku">2차 CP 자랑존</PageTitle><p>캐릭터를 찾을 수 없습니다</p></div>
       </section>
     );
   }
@@ -45,10 +45,10 @@ export default function TCharDetailPage() {
   return (
     <section className="page">
       <div className="page-head">
-        <PageTitle href="/tchars">2차 CP 자랑존</PageTitle>
+        <PageTitle href="/otaku">2차 CP 자랑존</PageTitle>
         <EditableDesc k="tchars-detail-desc" def="표정 썸네일을 누르면 이미지가 전환됩니다" />
         <div className="head-actions">
-          {isAdmin && <button className="btn btn-dark" onClick={() => router.push(`/tchars/${c.id}/edit`)}>EDIT</button>}
+          {isAdmin && <button className="btn btn-dark" onClick={() => router.push(`/otaku/${c.id}/edit`)}>EDIT</button>}
           {isAdmin && <button className="btn btn-dark" onClick={() => setDelAsk(true)}>DELETE</button>}
         </div>
       </div>
@@ -131,7 +131,7 @@ export default function TCharDetailPage() {
         body="삭제한 캐릭터는 복구할 수 없습니다."
         onClose={() => setDelAsk(false)}
         buttons={[
-          { label: 'DELETE', kind: 'accent', onClick: () => { setTchars(tchars.filter(x => x.id !== c.id)); router.push('/tchars'); } },
+          { label: 'DELETE', kind: 'accent', onClick: () => { setTchars(tchars.filter(x => x.id !== c.id)); router.push('/otaku'); } },
           { label: 'CANCEL', kind: 'ghost', onClick: () => setDelAsk(false) },
         ]} />
     </section>
