@@ -98,17 +98,17 @@ export default function TCharDetailPage() {
           <div style={{ display: 'grid', gap: 7, padding: '12px 0', borderBottom: '1px dashed var(--line)', fontSize: 12.5 }}>
             {c.scenario && (
               <div style={{ display: 'flex', gap: 10 }}>
-                <b style={{ minWidth: 70, color: 'var(--faint)', fontWeight: 600 }}>Scenario</b>{c.scenario}
+                <b style={{ minWidth: 70, color: 'var(--faint)', fontWeight: 600 }}>Genre</b>{c.scenario}
               </div>
             )}
             {c.rule && (
               <div style={{ display: 'flex', gap: 10 }}>
-                <b style={{ minWidth: 70, color: 'var(--faint)', fontWeight: 600 }}>Rule</b>{c.rule}
+                <b style={{ minWidth: 70, color: 'var(--faint)', fontWeight: 600 }}>Run</b>{c.rule}
               </div>
             )}
             {c.role && (
               <div style={{ display: 'flex', gap: 10 }}>
-                <b style={{ minWidth: 70, color: 'var(--faint)', fontWeight: 600 }}>Role</b>{c.role}
+                <b style={{ minWidth: 70, color: 'var(--faint)', fontWeight: 600 }}>Tag</b>{c.role}
               </div>
             )}
           </div>

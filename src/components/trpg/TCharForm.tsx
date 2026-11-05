@@ -186,18 +186,18 @@ export function TCharForm({ editId }: { editId?: string }) {
           <KInput value={name} onChange={e => setName(e.target.value)} />
         </div>
         <div style={{ width: 130 }}>
-          <label className="k-label" style={{ marginBottom: 5 }}>Role</label>
+          <label className="k-label" style={{ marginBottom: 5 }}>Tag</label>
           {/* PL · GMPC · HO1 등 자유 표기 */}
           <KInput value={role} onChange={e => setRole(e.target.value)} />
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <div style={{ flex: 1 }}>
-          <label className="k-label" style={{ marginBottom: 5 }}>Scenario</label>
+          <label className="k-label" style={{ marginBottom: 5 }}>Genre</label>
           <KInput value={scenario} onChange={e => setScenario(e.target.value)} />
         </div>
         <div style={{ width: 160 }}>
-          <label className="k-label" style={{ marginBottom: 5 }}>Rule</label>
+          <label className="k-label" style={{ marginBottom: 5 }}>Run</label>
           <KInput value={rule} onChange={e => setRule(e.target.value)} />
         </div>
       </div>

@@ -1012,6 +1012,8 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 /* 긴 이름·캐치프레이즈는 말줄임 (v1.9) — 멤버 점(.who) 자리를 위해 오른쪽 여백 확보 */
 .rel-card .nm b{font-family:var(--serif);font-size:calc(16px*var(--fs,1));letter-spacing:.18em;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rel-card .nm span{font-size:calc(11px*var(--fs,1));color:var(--faint);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:44px}
+/* 이름 옆 「멤버」 표시 — 위 span 규칙(한 줄 통째 블록)을 받지 않게 되돌리고 이름 옆에 작게 */
+.rel-card .nm b .pill.rel-vis{display:inline-block;vertical-align:middle;margin-left:6px;padding:1px 7px;padding-right:7px;font-family:var(--sans);font-size:calc(9px*var(--fs,1));letter-spacing:.02em;line-height:1.5;color:var(--sub);overflow:visible}
 /* 멤버 테마색 점 — 별도 줄 없이 텍스트와 겹쳐 카드 오른쪽 아래에 고정 */
 .rel-card .nm .who{position:absolute;right:14px;bottom:12px;display:flex;gap:4px}
 .rel-card .nm .who i{width:14px;height:14px;border-radius:50%;font-style:normal;box-shadow:0 0 0 2px var(--panel-solid)} /* 카드 구석 표시라 작게 (v2.0 사용자 요청) */
