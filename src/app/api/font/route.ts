@@ -16,7 +16,10 @@ export async function GET(req: Request) {
   const u = new URL(req.url).searchParams.get('u') ?? '';
   let target: URL;
   try { target = new URL(u); } catch { return new Response('bad url', { status: 400 }); }
-  if (target.protocol !== 'https:' || !ALLOWED.some(r => r.test(target.hostname))) {
+  // R2로 옮긴 경우 그 공개 주소 호스트도 허용 (/api/files)
+  let r2Host = '';
+  try { r2Host = process.env.R2_PUBLIC_URL ? new URL(process.env.R2_PUBLIC_URL).hostname : ''; } catch { /* 잘못된 값 — 무시 */ }
+  if (target.protocol !== 'https:' || !(ALLOWED.some(r => r.test(target.hostname)) || (r2Host && target.hostname === r2Host))) {
     return new Response('host not allowed', { status: 400 });
   }
   try {
