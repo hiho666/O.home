@@ -10,6 +10,7 @@ import { backend, COLLECTION_OF, CONTENT_COLLECTIONS } from './backend';
 import type { Backend, ListItem } from './backend';
 import { allBlobs, getBlob, putBlobAs, putBlob } from './blobStore';
 import { getSetting, setSetting, SETTING_KEYS, isLocalOnlySetting } from './settingStore';
+import { r2Base, r2Ready } from './r2Files';
 
 export interface Snapshot {
   version: 2;
@@ -30,7 +31,8 @@ export type Progress = (msg: string, done?: number, total?: number) => void;
 
 /** 저장소가 만든 이미지 주소인지 (Supabase Storage / Firebase Storage) */
 export function isFileUrl(s: string): boolean {
-  return /\/storage\/v1\/object\/public\//.test(s) || /firebasestorage\.googleapis\.com/.test(s);
+  return /\/storage\/v1\/object\/public\//.test(s) || /firebasestorage\.googleapis\.com/.test(s)
+    || (r2Base() !== '' && s.startsWith(`${r2Base()}/`));   // R2 (r2Files)
 }
 
 /**
@@ -101,6 +103,8 @@ export function replaceRefs<T>(value: T, map: Map<string, string>): T {
  * 구별되지 않아, 거기 쓰이던 이미지가 통째로 「안 쓰는 파일」이 되어 지워진다.
  */
 export async function findOrphanFiles(be: Backend): Promise<{ ref: string; size: number }[]> {
+  // R2 주소를 알아야 R2 이미지를 「쓰는 중」으로 센다 — 모르면 멀쩡한 이미지가 지울 목록에 든다
+  await r2Ready();
   const snap = await dumpAll(be);
   if (snap.failed?.length) {
     throw new Error(`${snap.failed.join(', ')}을(를) 읽지 못해 정리를 멈췄습니다 — `

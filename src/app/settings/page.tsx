@@ -60,6 +60,7 @@ import { migrateTo, findOrphanFiles } from '@/lib/transfer';
 import { FIRESTORE_RULES, STORAGE_RULES } from '@/lib/firebaseRules';
 import { SCHEMA_SQL } from '@/lib/schemaSql';
 import { PushAdminRow } from '@/components/shell/PushSettings';
+import { R2StorageRow } from '@/components/settings/R2StorageRow';
 
 const CATEGORIES = [
   '디자인', '메인 페이지', '위젯', '메뉴 관리', '게시판 관리', '자관 질문', '커미션', 'TRPG', '감상타래', '메모장',
@@ -1743,6 +1744,8 @@ function DataPane() {
             disabled={pushing} onClick={doPush}>{pushing ? '올리는 중…' : '↑ 설정 올리기'}</button>
         </div>
       )}
+      {/* 이미지 저장소 R2 — 상태·사용량·옮기기 (components/settings/R2StorageRow) */}
+      {serverOn && <R2StorageRow />}
       {/* 쓰지 않는 이미지 정리 (v2.0) — 글을 지워도 저장소 파일은 남는다 */}
       {serverOn && (
         <div className="set-row" style={{ flexWrap: 'wrap' }}>

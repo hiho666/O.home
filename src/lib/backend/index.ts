@@ -2,6 +2,7 @@
 // 백엔드 진입점 (v2.0) — 런타임 설정을 보고 Supabase / Firebase 중 하나를 만든다.
 // 설정이 없으면 null = 로컬 모드(브라우저 저장, 개발·오프라인용).
 import type { Backend, BackendConfig } from './types';
+import { attachR2 } from '../r2Files';
 
 let current: Backend | null = null;
 let ready = false;
@@ -18,6 +19,8 @@ export async function createBackend(cfg: BackendConfig): Promise<Backend> {
 /** 앱 시작 시 1회 — 확정된 설정으로 백엔드를 만든다 */
 export async function initBackend(cfg: BackendConfig | null): Promise<Backend | null> {
   current = cfg ? await createBackend(cfg) : null;
+  // 이미지만 R2로 (환경변수가 있을 때만) — 이전 화면이 만드는 대상 백엔드에는 붙이지 않는다
+  if (current) attachR2(current);
   ready = true;
   return current;
 }
